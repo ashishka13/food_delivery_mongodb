@@ -1,0 +1,16 @@
+customer orders food on restaurant
+restaurant prepares food for some time
+delivery guy goes to restaurant in some time
+picks the ready food
+delivers it to us after some time
+
+
+1 customer selects the restaurant = GET = start customer waits go thread
+2 places order for that restaurant = POST = start food prepare thread
+3 delivery guy gets notified of that order
+4 restaurant starts making food = 1 minute timer go thread
+5 delivery guy starts towards restaurant = 1 minute go thread
+6 delivery guy reaches to restaurant
+7 restaurant tells delivery guy about ready food
+8 delivery guy starts towards customer = 1 minute go thread
+9 customer gets the food = end of customer wait go thread
