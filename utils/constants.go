@@ -7,17 +7,17 @@ const (
 	// Restaurants collection name
 	Restaurants = "restaurants"
 
-	// DeliveryBoys collection name
-	DeliveryBoys = "deliveryboys"
+	// DeliveryPersons collection name
+	DeliveryPersons = "delivery_persons"
 
 	// Orders collection name
 	Orders = "orders"
 
-	// FoodDelivery database name
+	// food-delivery database name
 	FoodDelivery = "food_delivery"
 )
 
-// delivery boy locations
+// delivery person locations
 const (
 	Dock = "dock"
 
