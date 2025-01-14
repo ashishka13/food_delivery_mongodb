@@ -1,6 +1,7 @@
 package services
 
 import (
+	"food-delivery/services/cooking"
 	"food-delivery/services/customer"
 	deliveryperson "food-delivery/services/delivery-person"
 	"food-delivery/services/order"
@@ -12,6 +13,7 @@ type Services struct {
 	CustomerService       customer.CustomerServiceInterface
 	OrderService          order.OrderServiceInterface
 	DeliveryPersonService deliveryperson.DeliveryPersonServicesInterface
+	CookingService        cooking.CookingServiceInterface
 }
 
 func InitServices() Services {
@@ -23,11 +25,13 @@ func InitServices() Services {
 	customerService := customer.NewCustomerServiceInterface(db)
 	orderService := order.NewOrderServiceInterface(db)
 	deliveryPersonService := deliveryperson.NewDeliveryPersonServicesInterface(db)
+	cookingService := cooking.NewCookingServiceInterface(db)
 
 	services := Services{
 		CustomerService:       customerService,
 		OrderService:          orderService,
 		DeliveryPersonService: deliveryPersonService,
+		CookingService:        cookingService,
 	}
 
 	return services

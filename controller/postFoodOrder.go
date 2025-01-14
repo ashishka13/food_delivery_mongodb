@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -23,13 +21,19 @@ type FoodOrderRequest struct {
 	RestaurantName string `json:"restaurant_name" validate:"required"`
 }
 
+type FoodOrderResponse struct {
+	FoodName       string `json:"food_name"`
+	Quantity       int    `json:"quantity"`
+	RestaurantName string `json:"restaurant_name"`
+}
+
 type AnyStruct struct {
 }
 
 func (a *AnyStruct) postFoodOrder(w http.ResponseWriter, r *http.Request, services services.Services) {
 	ctx := r.Context()
-
 	foodOrderRequest := FoodOrderRequest{}
+
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&foodOrderRequest)
 	if err != nil {
@@ -46,27 +50,38 @@ func (a *AnyStruct) postFoodOrder(w http.ResponseWriter, r *http.Request, servic
 		return
 	}
 
-	customerPresent, err := checkIfCustomerExists(ctx, models.Customer{ID: foodOrderRequest.CustomerID}, services)
+	customer, err := services.CustomerService.GetCustomerByID(ctx, foodOrderRequest.CustomerID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Println("error occurred while getting customer details", err)
-		return
-	}
-	if !customerPresent {
-		http.Error(w, "could not find this customer. First create a customer.", http.StatusForbidden)
-		w.Write([]byte("create a customer here: http://localhost:5005/createCustomer"))
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "could not find this customer. First create a customer.", http.StatusForbidden)
+			w.Write([]byte("create a customer here: http://localhost:5005/createCustomer"))
+			return
+		}
+		log.Println("error occurred while checkIfCustomerExists", err)
+		http.Error(w, "error occurred while getting customer details"+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	foodOrder := convertFoodOrderRequestToFoodOrder(foodOrderRequest)
-	_, err = services.OrderService.CreateOrder(ctx, foodOrder)
+	createdOrder, err := services.OrderService.CreateOrder(ctx, foodOrder)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Println("error occurred while creating foodOrderRequest", err)
 		return
 	}
 
-	displayOrder, err := json.MarshalIndent(foodOrderRequest, " ", "  ")
+	foodOrder.ID = createdOrder.ID
+	_, err = services.CustomerService.UpdateCustomerOrderID(ctx, customer, foodOrder)
+	if err != nil {
+		log.Println("error occurred while updating customer order details", err)
+		http.Error(w, "error occurred while updating customer order details"+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	displayOrder, err := json.MarshalIndent(FoodOrderResponse{
+		FoodName:       foodOrder.FoodName,
+		Quantity:       foodOrder.Quantity,
+		RestaurantName: foodOrder.RestaurantName}, " ", "  ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Println("display order marshal error", err)
@@ -83,21 +98,8 @@ func (a *AnyStruct) postFoodOrder(w http.ResponseWriter, r *http.Request, servic
 	w.Header().Set("Content-Type", "application/json")
 }
 
-func checkIfCustomerExists(ctx context.Context, customer models.Customer, services services.Services) (bool, error) {
-	_, err := services.CustomerService.GetCustomer(ctx, customer)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return false, nil
-		}
-		log.Println("error occurred while checkIfCustomerExists", err)
-		return false, err
-	}
-	return true, nil
-}
-
 func convertFoodOrderRequestToFoodOrder(foodOrderRequest FoodOrderRequest) models.FoodOrder {
 	foodOrder := models.FoodOrder{
-		ID:             primitive.NewObjectID().Hex(),
 		CustomerID:     foodOrderRequest.CustomerID,
 		FoodName:       foodOrderRequest.FoodName,
 		Quantity:       foodOrderRequest.Quantity,
