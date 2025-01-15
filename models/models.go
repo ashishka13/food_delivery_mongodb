@@ -37,14 +37,19 @@ type DeliveryPerson struct {
 }
 
 type Customer struct {
-	ID               primitive.ObjectID `bson:"id" json:"id"`
-	Name             string             `bson:"name" json:"name"`
-	Address          string             `bson:"address" json:"address"`
-	Phone            string             `bson:"phone" json:"phone"`
-	CurrentOrderID   string             `bson:"currentorderid" json:"currentorderid"`
-	OrderPlaced      bool               `bson:"orderplaced" json:"orderplaced"`
-	PlacedTime       time.Time          `bson:"placedtime" json:"placedtime"`
-	ReceiveTime      time.Time          `bson:"receivetime" json:"receivetime"`
-	DeliveryPersonID string             `bson:"deliverypersonid,omitempty" json:"deliverypersonid"`
-	InProcess        bool               `bson:"inprocess" json:"inprocess"`
+	ID      primitive.ObjectID `bson:"id" json:"id"`
+	Name    string             `bson:"name" json:"name"`
+	Address string             `bson:"address" json:"address"`
+	Phone   string             `bson:"phone" json:"phone"`
+	Orders  []CustomerOrders   `bson:"orders" json:"orders"`
+}
+
+type CustomerOrders struct {
+	OrderName        string    `bson:"ordername" json:"ordername"`
+	CurrentOrderID   string    `bson:"currentorderid" json:"currentorderid"`
+	OrderPlaced      bool      `bson:"orderplaced" json:"orderplaced"`
+	PlacedTime       time.Time `bson:"placedtime" json:"placedtime"`
+	ReceiveTime      time.Time `bson:"receivetime" json:"receivetime"`
+	DeliveryPersonID string    `bson:"deliverypersonid,omitempty" json:"deliverypersonid"`
+	InProcess        bool      `bson:"inprocess" json:"inprocess"`
 }

@@ -45,7 +45,6 @@ func (s *OrderService) UpdateOrder(ctx context.Context, foodOrder models.FoodOrd
 }
 
 func (s *OrderService) GetOrderWithFilter(ctx context.Context, filter bson.M) ([]models.FoodOrder, error) {
-	log.Println(filter)
 	resultset, err := s.Database.Collection(utils.Orders).Find(ctx, bson.M{"cookassigned": false})
 	if err != nil {
 		log.Println("CheckOrdersRestaurant Orders find all ", err)

@@ -15,11 +15,16 @@ type CustomerGetRequest struct {
 }
 
 type CustomerGetResponse struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Address string `json:"address"`
-	Phone   string `json:"phone"`
-	OrderID string `json:"orderid"`
+	ID      string           `json:"id"`
+	Name    string           `json:"name"`
+	Address string           `json:"address"`
+	Phone   string           `json:"phone"`
+	Orders  []CustomerOrders `json:"orders"`
+}
+
+type CustomerOrders struct {
+	CurrentOrderID string `json:"currentorderid"`
+	OrderName      string `json:"ordername"`
 }
 
 func getCustomer(w http.ResponseWriter, r *http.Request, services services.Services) {

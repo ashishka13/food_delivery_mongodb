@@ -74,7 +74,7 @@ func (s *DeliveryPersonService) UpdateDeliveryPersonCustom(ctx context.Context, 
 func (s *DeliveryPersonService) GetDeliveryPersonCustom(ctx context.Context, findFilter bson.M) (models.DeliveryPerson, error) {
 	deliveryPersonFound := models.DeliveryPerson{}
 	err := s.Database.Collection(utils.DeliveryPersons).FindOne(ctx, findFilter).Decode(&deliveryPersonFound)
-	if err != nil {
+	if err != nil && err != mongo.ErrNoDocuments {
 		log.Println("error occurred while getting the delivery person", err)
 		return models.DeliveryPerson{}, err
 	}
