@@ -91,6 +91,7 @@ func convertCustomerCreateRequestToCustomer(customerCreateRequest CustomerCreate
 		Name:    customerCreateRequest.Name,
 		Address: customerCreateRequest.Address,
 		Phone:   customerCreateRequest.Phone,
+		Orders:  []models.CustomerOrders{},
 	}
 
 	return customer

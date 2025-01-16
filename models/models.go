@@ -17,7 +17,7 @@ type FoodOrder struct {
 	DeliveryPersonAssigned bool               `bson:"deliverypersonassigned" json:"deliverypersonassigned"`
 	DeliveryPersonID       string             `bson:"deliverypersonid,omitempty" json:"deliverypersonid"`
 	CookedAndReady         bool               `bson:"cookedandready" json:"cookedandready"`
-	CompleteStatus         bool               `bson:"completestatus" json:"completestatus"`
+	PickedStatus           bool               `bson:"pickedstatus" json:"pickedstatus"`
 }
 
 type Restaurant struct {
@@ -47,9 +47,7 @@ type Customer struct {
 type CustomerOrders struct {
 	OrderName        string    `bson:"ordername" json:"ordername"`
 	CurrentOrderID   string    `bson:"currentorderid" json:"currentorderid"`
-	OrderPlaced      bool      `bson:"orderplaced" json:"orderplaced"`
 	PlacedTime       time.Time `bson:"placedtime" json:"placedtime"`
 	ReceiveTime      time.Time `bson:"receivetime" json:"receivetime"`
 	DeliveryPersonID string    `bson:"deliverypersonid,omitempty" json:"deliverypersonid"`
-	InProcess        bool      `bson:"inprocess" json:"inprocess"`
 }

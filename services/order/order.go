@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 
 type OrderServiceInterface interface {
 	CreateOrder(ctx context.Context, foodOrder models.FoodOrder) (*models.FoodOrder, error)
-	UpdateOrder(ctx context.Context, foodOrder models.FoodOrder) (models.FoodOrder, error)
+	UpdateOrder(ctx context.Context, findFilter, updateSet bson.M) error
 	GetOrderWithFilter(ctx context.Context, filter bson.M) ([]models.FoodOrder, error)
 }
 
@@ -40,12 +41,20 @@ func (s *OrderService) CreateOrder(ctx context.Context, foodOrder models.FoodOrd
 	return &foodOrder, nil
 }
 
-func (s *OrderService) UpdateOrder(ctx context.Context, foodOrder models.FoodOrder) (models.FoodOrder, error) {
-	return models.FoodOrder{}, nil
+func (s *OrderService) UpdateOrder(ctx context.Context, findFilter, updateSet bson.M) error {
+	updateresult, err := s.Database.Collection(utils.Orders).UpdateOne(context.Background(), findFilter, updateSet)
+	if err != nil {
+		log.Println("error occurred while updating the order status", err)
+		return err
+	}
+	if updateresult.ModifiedCount == 0 {
+		return errors.New("no documents were updated")
+	}
+	return nil
 }
 
 func (s *OrderService) GetOrderWithFilter(ctx context.Context, filter bson.M) ([]models.FoodOrder, error) {
-	resultset, err := s.Database.Collection(utils.Orders).Find(ctx, bson.M{"cookassigned": false})
+	resultset, err := s.Database.Collection(utils.Orders).Find(ctx, filter)
 	if err != nil {
 		log.Println("CheckOrdersRestaurant Orders find all ", err)
 		return nil, err

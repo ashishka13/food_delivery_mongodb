@@ -58,12 +58,18 @@ func getCustomer(w http.ResponseWriter, r *http.Request, services services.Servi
 		return
 	}
 
+	customerOrders := make([]CustomerOrders, len(customerFound.Orders))
+	for key, val := range customerFound.Orders {
+		customerOrders[key].CurrentOrderID = val.CurrentOrderID
+		customerOrders[key].OrderName = val.OrderName
+	}
+
 	displayCustomer, err := json.MarshalIndent(CustomerGetResponse{
 		ID:      customerFound.ID.Hex(),
 		Name:    customerFound.Name,
 		Address: customerFound.Address,
 		Phone:   customerFound.Phone,
-		OrderID: customerFound.CurrentOrderID}, " ", "  ")
+		Orders:  customerOrders}, " ", "  ")
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

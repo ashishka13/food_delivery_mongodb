@@ -71,7 +71,7 @@ func (a *AnyStruct) postFoodOrder(w http.ResponseWriter, r *http.Request, servic
 	}
 
 	foodOrder.ID = createdOrder.ID
-	_, err = services.CustomerService.UpdateCustomerOrderID(ctx, customer, foodOrder)
+	_, err = services.CustomerService.UpdateCustomerOrders(ctx, customer, foodOrder)
 	if err != nil {
 		log.Println("error occurred while updating customer order details", err)
 		http.Error(w, "error occurred while updating customer order details"+err.Error(), http.StatusInternalServerError)

@@ -2,13 +2,16 @@ package customer
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"food-delivery/models"
+	"food-delivery/services/order"
 	"food-delivery/utils"
 )
 
@@ -16,16 +19,20 @@ type CustomerServiceInterface interface {
 	CreateCustomer(ctx context.Context, customer models.Customer) (*models.Customer, error)
 	GetCustomerByID(ctx context.Context, customerID string) (models.Customer, error)
 	GetCustomerByPhone(ctx context.Context, phone string) (*models.Customer, error)
-	UpdateCustomerOrderID(ctx context.Context, customer models.Customer, foodOrder models.FoodOrder) (*models.Customer, error)
+	UpdateCustomerOrders(ctx context.Context, customer models.Customer, foodOrder models.FoodOrder) (*models.Customer, error)
 	UpdateCustomerOrderCustom(ctx context.Context, findFilter, updateSet bson.M) error
+	GetAllCustomers(ctx context.Context) ([]models.Customer, error)
+	GetAllWaitingCustomersCustom(ctx context.Context, findFilter bson.M) ([]models.Customer, error)
+	GetCustomerOrders(ctx context.Context, customerID primitive.ObjectID) ([]models.FoodOrder, error)
 }
 
 type CustomerService struct {
-	Database *mongo.Database
+	Database     *mongo.Database
+	OrderService order.OrderServiceInterface
 }
 
 func NewCustomerServiceInterface(db *mongo.Database) CustomerServiceInterface {
-	return &CustomerService{Database: db}
+	return &CustomerService{Database: db, OrderService: order.NewOrderServiceInterface(db)}
 }
 
 func (s *CustomerService) CreateCustomer(ctx context.Context, customer models.Customer) (*models.Customer, error) {
@@ -72,13 +79,26 @@ func (s *CustomerService) GetCustomerByPhone(ctx context.Context, phone string) 
 	return &customerFound, nil
 }
 
-func (s *CustomerService) UpdateCustomerOrderID(ctx context.Context, customer models.Customer, foodOrder models.FoodOrder) (*models.Customer, error) {
-	filter := bson.M{"id": customer.ID}
-	update := bson.M{"$set": bson.M{"currentorderid": foodOrder.ID, "orderplaced": true, "placedtime": foodOrder.PlacedTime}}
+func (s *CustomerService) UpdateCustomerOrders(ctx context.Context, _ models.Customer, foodOrder models.FoodOrder) (*models.Customer, error) {
+	customerObjID, err := primitive.ObjectIDFromHex(foodOrder.CustomerID)
+	if err != nil {
+		log.Println("invalid customer ID", err)
+		return nil, err
+	}
 
-	res, err := s.Database.Collection(utils.Customers).UpdateOne(ctx, filter, update)
-	if err != nil || res.ModifiedCount == 0 {
-		log.Println("update single customer error", err)
+	singleCustomerOrder := models.CustomerOrders{
+		OrderName:      foodOrder.FoodName,
+		CurrentOrderID: foodOrder.ID.Hex(),
+		PlacedTime:     foodOrder.PlacedTime,
+	}
+
+	filter := bson.M{"id": customerObjID}
+	update := bson.M{"$push": bson.M{"orders": singleCustomerOrder}}
+	opts := options.Update().SetUpsert(true)
+
+	_, err = s.Database.Collection(utils.Customers).UpdateOne(ctx, filter, update, opts)
+	if err != nil {
+		fmt.Println("Error updating document with latest order:", err)
 		return nil, err
 	}
 
@@ -95,16 +115,52 @@ func (s *CustomerService) UpdateCustomerOrderCustom(ctx context.Context, findFil
 	return nil
 }
 
-/*
-cfilter := bson.M{"currentorderid": singleFood.ID}
-	cupdate := bson.M{"$set": bson.M{"inprocess": true}}
-	_, err = db.Collection(utils.Customers).UpdateOne(context.Background(), cfilter, cupdate)
+func (s *CustomerService) GetAllCustomers(ctx context.Context) ([]models.Customer, error) {
+	cursor, err := s.Database.Collection(utils.Customers).Find(ctx, bson.M{})
+	if err != nil {
+		fmt.Println("error getting customer list:", err)
+		return []models.Customer{}, err
+	}
 
-	cfilter := primitive.M{"currentorderid": singleFood.ID}
-	cupdate := primitive.M{"$set": primitive.M{"deliverypersonname": singleBoy.Name}}
-	updateresult, err = db.Collection(utils.Customers).UpdateOne(context.Background(), cfilter, cupdate)
+	customers := make([]models.Customer, 0)
+	for cursor.Next(ctx) {
+		singleCustomer := models.Customer{}
+		if err = cursor.Decode(&singleCustomer); err != nil {
+			log.Println("GetAllCustomers decode error ", err)
+			return []models.Customer{}, nil
+		}
+		customers = append(customers, singleCustomer)
+	}
 
-	cfilter := primitive.M{"currentorderid": singleFood.ID}
-	cupdate := primitive.M{"$set": primitive.M{"receivetime": time.Now(), "currentorderid": "", "orderplaced": false, "inprocess": false}}
-	_, err = db.Collection(utils.Customers).UpdateOne(context.Background(), cfilter, cupdate)
-*/
+	return customers, nil
+}
+
+func (s *CustomerService) GetCustomerOrders(ctx context.Context, customerID primitive.ObjectID) ([]models.FoodOrder, error) {
+	findFilter := bson.M{"customerid": customerID.Hex(), "pickedstatus": false}
+	orders, err := s.OrderService.GetOrderWithFilter(ctx, findFilter)
+	if err != nil {
+		fmt.Println("error getting customer list:", err)
+		return []models.FoodOrder{}, err
+	}
+	return orders, nil
+}
+
+func (s *CustomerService) GetAllWaitingCustomersCustom(ctx context.Context, findFilter bson.M) ([]models.Customer, error) {
+	cursor, err := s.Database.Collection(utils.Customers).Find(ctx, findFilter)
+	if err != nil {
+		fmt.Println("error getting customer list:", err)
+		return []models.Customer{}, err
+	}
+
+	customers := make([]models.Customer, 0)
+	for cursor.Next(ctx) {
+		singleCustomer := models.Customer{}
+		if err = cursor.Decode(&singleCustomer); err != nil {
+			log.Println("GetAllCustomers decode error ", err)
+			return []models.Customer{}, nil
+		}
+		customers = append(customers, singleCustomer)
+	}
+
+	return customers, nil
+}
