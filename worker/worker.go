@@ -31,7 +31,7 @@ func RunProcesses() {
 
 	j := JobRunners{
 		Runners: []func(duhh string){
-			// w.CustomerProcess,
+			w.CustomerProcess,
 			w.DeliveryPersonAssignProcess,
 			w.DeliveryPersonPickupProcess,
 			w.RestaurantCookingProcess,
@@ -212,6 +212,8 @@ func (w *WServices) CustomerProcess(duhh string) {
 			log.Println("error occurred while getting customers list", err)
 			return
 		}
+
+		log.Println("=-=-=-customers=-=-=-=-=-", customers)
 		for _, singleCustomer := range customers {
 			go func() {
 				orders, err := w.Services.CustomerService.GetCustomerOrders(ctx, singleCustomer.ID)
@@ -219,6 +221,7 @@ func (w *WServices) CustomerProcess(duhh string) {
 					log.Println("error occurred while getting customer orders", err)
 					return
 				}
+				log.Println("=-=-=-orders=-=-=-=-=-", orders)
 
 				for _, singleOrder := range orders {
 					findFilter := bson.M{"currentcustomerid": singleCustomer.ID.Hex(), "orderpicked": true, "currentlocation": utils.AtCustomer}
@@ -233,8 +236,18 @@ func (w *WServices) CustomerProcess(duhh string) {
 					log.Printf("order %s picked up by customer", singleOrder.ID.Hex())
 
 					findFilter = bson.M{"id": deliveryperson.ID}
-					updateSet := bson.M{"$set": bson.M{"busystatus": false, "currentlocation": "", "currentorderid": "", "currentcustomerid": ""}}
-					w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet)
+					updateSet := bson.M{"$set": bson.M{"busystatus": false, "currentlocation": utils.Dock, "currentorderid": "", "currentcustomerid": "", "orderpicked": false}}
+					if err = w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet); err != nil {
+						log.Println("error occurred while updating delivery person", err)
+						return
+					}
+
+					findFilter = bson.M{"id": singleCustomer.ID, "orders.currentorderid": singleOrder.ID.Hex()}
+					updateSet = bson.M{"$set": bson.M{"orders.$.receivetime": time.Now()}}
+					if err = w.Services.CustomerService.UpdateCustomerOrderCustom(ctx, findFilter, updateSet); err != nil {
+						log.Println(err)
+						return
+					}
 				}
 			}()
 		}

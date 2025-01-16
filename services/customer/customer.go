@@ -136,7 +136,7 @@ func (s *CustomerService) GetAllCustomers(ctx context.Context) ([]models.Custome
 }
 
 func (s *CustomerService) GetCustomerOrders(ctx context.Context, customerID primitive.ObjectID) ([]models.FoodOrder, error) {
-	findFilter := bson.M{"customerid": customerID.Hex(), "pickedstatus": false}
+	findFilter := bson.M{"customerid": customerID.Hex(), "cookedandready": true}
 	orders, err := s.OrderService.GetOrderWithFilter(ctx, findFilter)
 	if err != nil {
 		fmt.Println("error getting customer list:", err)
