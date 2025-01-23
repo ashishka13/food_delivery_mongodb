@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
+	"food-delivery/models"
 	"food-delivery/services"
 	"food-delivery/utils"
 	"log"
@@ -33,7 +35,7 @@ func RunProcesses() {
 		Runners: []func(duhh string){
 			w.CustomerProcess,
 			w.DeliveryPersonAssignProcess,
-			w.DeliveryPersonPickupProcess,
+			w.RestaurantHandoverOrderProcesss,
 			w.RestaurantCookingProcess,
 		},
 	}
@@ -84,15 +86,15 @@ func (w *WServices) RestaurantCookingProcess(duhh string) {
 func (w *WServices) DeliveryPersonAssignProcess(duhh string) {
 	t := time.NewTicker(time.Second * 2)
 	for range t.C {
-
 		ctx := context.Background()
-		orders, err := w.Services.OrderService.GetOrderWithFilter(ctx, bson.M{"deliverypersonassigned": false})
-		if err != nil && err != mongo.ErrNoDocuments {
-			log.Println("error occurred while getting orders", err)
+
+		ordersAndPersons, err := w.clubDeliveryPersonAndOrder(ctx)
+		if err != nil {
+			log.Println("error occurred while clubDeliveryPersonAndOrder", err)
 			return
 		}
 
-		for _, singleOrder := range orders {
+		for singlePerson, singleOrder := range ordersAndPersons {
 			go func() {
 				log.Println("assigning the delivery person for order:", singleOrder.ID.Hex())
 
@@ -104,13 +106,7 @@ func (w *WServices) DeliveryPersonAssignProcess(duhh string) {
 					return
 				}
 
-				foundDeliveryPerson, err := w.Services.DeliveryPersonService.GetDeliveryPersonCustom(ctx, bson.M{"busystatus": false})
-				if err != nil && err != mongo.ErrNoDocuments {
-					log.Print("error occurred while getting free delivery person", err)
-					return
-				}
-
-				findFilter = bson.M{"id": foundDeliveryPerson.ID}
+				findFilter = bson.M{"id": singlePerson.ID}
 				updateSet = bson.M{"$set": bson.M{
 					"currentorderid":    singleOrder.ID.Hex(),
 					"currentcustomerid": singleOrder.CustomerID,
@@ -124,7 +120,13 @@ func (w *WServices) DeliveryPersonAssignProcess(duhh string) {
 
 				customerObjectID, _ := primitive.ObjectIDFromHex(singleOrder.CustomerID)
 				findFilter = bson.M{"id": customerObjectID, "orders.currentorderid": singleOrder.ID.Hex()}
-				updateSet = bson.M{"$set": bson.M{"orders.$.deliverypersonid": foundDeliveryPerson.ID.Hex()}}
+				updateSet = bson.M{"$set": bson.M{"orders.$.deliverypersonid": singlePerson.ID.Hex()}}
+
+				findQurty, _ := json.Marshal(findFilter)
+				updateq, _ := json.Marshal(updateSet)
+
+				log.Printf("find %s, update %s", findQurty, updateq)
+
 				err = w.Services.CustomerService.UpdateCustomerOrderCustom(ctx, findFilter, updateSet)
 				if err != nil {
 					log.Print("error occurred while updating the customer delivery person details", err)
@@ -135,7 +137,7 @@ func (w *WServices) DeliveryPersonAssignProcess(duhh string) {
 
 				time.Sleep(time.Second * 10) // time required to reach the restaurant
 
-				findFilter = bson.M{"id": foundDeliveryPerson.ID}
+				findFilter = bson.M{"id": singlePerson.ID}
 				updateSet = bson.M{"$set": bson.M{"currentlocation": utils.AtRestaurant}}
 				err = w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet)
 				if err != nil {
@@ -143,32 +145,26 @@ func (w *WServices) DeliveryPersonAssignProcess(duhh string) {
 					return
 				}
 
-				log.Printf("delivery person %s is at restaurant", foundDeliveryPerson.ID.Hex())
+				log.Printf("delivery person %s is at restaurant", singlePerson.ID.Hex())
 			}()
 		}
 	}
 }
 
-func (w *WServices) DeliveryPersonPickupProcess(duhh string) {
+func (w *WServices) RestaurantHandoverOrderProcesss(duhh string) {
 	t := time.NewTicker(time.Second * 2)
 	for range t.C {
 		ctx := context.Background()
-		orders, err := w.Services.OrderService.GetOrderWithFilter(ctx, bson.M{"deliverypersonassigned": true, "cookedandready": true, "pickedstatus": false})
-		if err != nil && err != mongo.ErrNoDocuments {
-			log.Println("error occurred while getting orders", err)
+
+		ordersAndPersons, err := w.clubReadyOrdersAndDeliveryPerson(ctx)
+		if err != nil {
+			log.Println("error occurred while clubReadyOrdersAndDeliveryPerson", err)
 			return
 		}
 
-		for _, singleOrder := range orders {
+		for singleOrder, singlePerson := range ordersAndPersons {
 			go func() {
-				findFilter := bson.M{"currentorderid": singleOrder.ID.Hex(), "currentlocation": utils.AtRestaurant}
-				foundDeliveryPerson, err := w.Services.DeliveryPersonService.GetDeliveryPersonCustom(ctx, findFilter)
-				if err != nil && err != mongo.ErrNoDocuments {
-					log.Print("error occurred while getting free delivery person", err)
-					return
-				}
-
-				findFilter = bson.M{"id": singleOrder.ID}
+				findFilter := bson.M{"id": singleOrder.ID}
 				updateSet := bson.M{"$set": bson.M{"pickedstatus": true}}
 				err = w.Services.OrderService.UpdateOrder(ctx, findFilter, updateSet)
 				if err != nil {
@@ -176,7 +172,7 @@ func (w *WServices) DeliveryPersonPickupProcess(duhh string) {
 					return
 				}
 
-				findFilter = bson.M{"id": foundDeliveryPerson.ID}
+				findFilter = bson.M{"id": singlePerson.ID}
 				updateSet = bson.M{"$set": bson.M{"orderpicked": true, "currentlocation": utils.InTransit}}
 				err = w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet)
 				if err != nil {
@@ -184,7 +180,7 @@ func (w *WServices) DeliveryPersonPickupProcess(duhh string) {
 					return
 				}
 
-				log.Printf("order picked. Delivery person %s is on the way", foundDeliveryPerson.ID.Hex())
+				log.Printf("order picked. Delivery person %s is on the way", singlePerson.ID.Hex())
 
 				time.Sleep(time.Second * 10) // time required to reach the customer
 
@@ -195,7 +191,7 @@ func (w *WServices) DeliveryPersonPickupProcess(duhh string) {
 					return
 				}
 
-				log.Printf("delivery person %s is at customer location", foundDeliveryPerson.ID.Hex())
+				log.Printf("delivery person %s is at customer location", singlePerson.ID.Hex())
 			}()
 		}
 	}
@@ -205,51 +201,115 @@ func (w *WServices) CustomerProcess(duhh string) {
 	t := time.NewTicker(time.Second * 2)
 	for range t.C {
 		ctx := context.Background()
-
-		findFilter := bson.M{"orders": bson.M{"$elemMatch": bson.M{"receivetime": time.Time{}}}}
-		customers, err := w.Services.CustomerService.GetAllWaitingCustomersCustom(ctx, findFilter)
-		if err != nil && err != mongo.ErrNoDocuments {
-			log.Println("error occurred while getting customers list", err)
+		customerAndReadyPickOrders, err := w.clubWaitingCustomerAndPickReadyOrders(ctx)
+		if err != nil {
+			log.Println("error occurred while clubWaitingCustomerAndPickReadyOrders", err)
 			return
 		}
 
-		log.Println("=-=-=-customers=-=-=-=-=-", customers)
-		for _, singleCustomer := range customers {
-			go func() {
-				orders, err := w.Services.CustomerService.GetCustomerOrders(ctx, singleCustomer.ID)
-				if err != nil && err != mongo.ErrNoDocuments {
-					log.Println("error occurred while getting customer orders", err)
-					return
-				}
-				log.Println("=-=-=-orders=-=-=-=-=-", orders)
+		for singleCustomer, singleOrder := range customerAndReadyPickOrders {
+			log.Printf("customer %s is getting order from delivery person %s", singleCustomer.ID.Hex(), singleOrder.DeliveryPersonID)
+			time.Sleep(time.Second * 7) //time taken by customer to receive the order
 
-				for _, singleOrder := range orders {
-					findFilter := bson.M{"currentcustomerid": singleCustomer.ID.Hex(), "orderpicked": true, "currentlocation": utils.AtCustomer}
-					deliveryperson, err := w.Services.DeliveryPersonService.GetDeliveryPersonCustom(ctx, findFilter)
-					if err != nil && err != mongo.ErrNoDocuments {
-						log.Println("error occurred while getting delivery persons", err)
-						return
-					}
+			findFilter := bson.M{"id": singleCustomer.ID, "orders.currentorderid": singleOrder.CurrentOrderID}
+			updateSet := bson.M{"$set": bson.M{"orders.$.receivetime": time.Now()}}
+			if err = w.Services.CustomerService.UpdateCustomerOrderCustom(ctx, findFilter, updateSet); err != nil {
+				log.Println(err)
+				return
+			}
+			log.Printf("order %s picked up by customer", singleOrder.CurrentOrderID)
 
-					log.Printf("customer %s is getting order from delivery person %s", singleCustomer.ID.Hex(), deliveryperson.ID.Hex())
-					time.Sleep(time.Second * 5) //time taken by customer to receive the order
-					log.Printf("order %s picked up by customer", singleOrder.ID.Hex())
-
-					findFilter = bson.M{"id": deliveryperson.ID}
-					updateSet := bson.M{"$set": bson.M{"busystatus": false, "currentlocation": utils.Dock, "currentorderid": "", "currentcustomerid": "", "orderpicked": false}}
-					if err = w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet); err != nil {
-						log.Println("error occurred while updating delivery person", err)
-						return
-					}
-
-					findFilter = bson.M{"id": singleCustomer.ID, "orders.currentorderid": singleOrder.ID.Hex()}
-					updateSet = bson.M{"$set": bson.M{"orders.$.receivetime": time.Now()}}
-					if err = w.Services.CustomerService.UpdateCustomerOrderCustom(ctx, findFilter, updateSet); err != nil {
-						log.Println(err)
-						return
-					}
-				}
-			}()
+			deliveryObjectID, _ := primitive.ObjectIDFromHex(singleOrder.DeliveryPersonID)
+			findFilter = bson.M{"id": deliveryObjectID, "currentlocation": utils.AtCustomer}
+			updateSet = bson.M{"$set": bson.M{"busystatus": false, "currentlocation": utils.Dock, "currentorderid": "", "currentcustomerid": "", "orderpicked": false}}
+			if err = w.Services.DeliveryPersonService.UpdateDeliveryPersonCustom(ctx, findFilter, updateSet); err != nil {
+				log.Println("error occurred while updating delivery person", err)
+				return
+			}
 		}
 	}
+}
+
+func (w *WServices) clubDeliveryPersonAndOrder(ctx context.Context) (map[models.DeliveryPerson]models.FoodOrder, error) {
+	findFilter := bson.M{"deliverypersonassigned": false}
+	orders, err := w.Services.OrderService.GetOrderWithFilter(ctx, findFilter)
+	if err != nil && err != mongo.ErrNoDocuments {
+		log.Println("error occurred while getting orders", err)
+		return nil, err
+	}
+
+	findFilter = bson.M{"busystatus": false}
+	deliveryPersons, err := w.Services.DeliveryPersonService.GetDeliveryPersonsCustom(ctx, findFilter)
+	if err != nil && err != mongo.ErrNoDocuments {
+		log.Println("error occurred while getting delivery persons", err)
+		return nil, err
+	}
+
+	ordersAndPersons := make(map[models.DeliveryPerson]models.FoodOrder)
+
+	lengthLimit := len(deliveryPersons)
+	if lengthLimit > len(orders) {
+		lengthLimit = len(orders)
+	}
+
+	for i := 0; i < lengthLimit; i++ {
+		ordersAndPersons[deliveryPersons[i]] = orders[i]
+	}
+
+	return ordersAndPersons, nil
+}
+
+func (w *WServices) clubReadyOrdersAndDeliveryPerson(ctx context.Context) (map[models.FoodOrder]models.DeliveryPerson, error) {
+	ordersAndPersons := make(map[models.FoodOrder]models.DeliveryPerson)
+
+	orders, err := w.Services.OrderService.GetOrderWithFilter(ctx, bson.M{"deliverypersonassigned": true, "cookedandready": true, "pickedstatus": false})
+	if err != nil && err != mongo.ErrNoDocuments {
+		log.Println("error occurred while getting orders", err)
+		return nil, err
+	}
+
+	for _, singleOrder := range orders {
+		findFilter := bson.M{"currentorderid": singleOrder.ID.Hex(), "currentlocation": utils.AtRestaurant}
+		foundDeliveryPerson, err := w.Services.DeliveryPersonService.GetDeliveryPersonCustom(ctx, findFilter)
+		if err != nil && err != mongo.ErrNoDocuments {
+			log.Print("error occurred while getting free delivery person", err)
+			return nil, err
+		}
+
+		ordersAndPersons[singleOrder] = foundDeliveryPerson
+	}
+
+	return ordersAndPersons, nil
+}
+
+func (w *WServices) clubWaitingCustomerAndPickReadyOrders(ctx context.Context) (map[*models.Customer]models.CustomerOrders, error) {
+	customerAndReadyPickOrders := make(map[*models.Customer]models.CustomerOrders)
+
+	findFilter := bson.M{"orders": bson.M{"$elemMatch": bson.M{"receivetime": time.Time{}}}}
+	customers, err := w.Services.CustomerService.GetAllWaitingCustomersCustom(ctx, findFilter)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
+		log.Println("error occurred while getting customers list", err)
+		return nil, err
+	}
+
+	for _, singleCustomer := range customers {
+		findFilter = bson.M{"currentcustomerid": singleCustomer.ID.Hex(), "orderpicked": true, "currentlocation": utils.AtCustomer}
+
+		deliverypersons, err := w.Services.DeliveryPersonService.GetDeliveryPersonsCustom(ctx, findFilter)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, nil
+			}
+			log.Println("error occurred while getting delivery persons", err)
+			return nil, err
+		}
+
+		for _, singleDeliveryPerson := range deliverypersons {
+			customerAndReadyPickOrders[&singleCustomer] = models.CustomerOrders{CurrentOrderID: singleDeliveryPerson.CurrentOrderID, DeliveryPersonID: singleDeliveryPerson.ID.Hex()}
+		}
+	}
+	return customerAndReadyPickOrders, nil
 }

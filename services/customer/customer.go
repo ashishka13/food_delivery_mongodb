@@ -131,6 +131,9 @@ func (s *CustomerService) GetAllCustomers(ctx context.Context) ([]models.Custome
 		}
 		customers = append(customers, singleCustomer)
 	}
+	if len(customers) == 0 {
+		return []models.Customer{}, mongo.ErrNoDocuments
+	}
 
 	return customers, nil
 }
@@ -160,6 +163,10 @@ func (s *CustomerService) GetAllWaitingCustomersCustom(ctx context.Context, find
 			return []models.Customer{}, nil
 		}
 		customers = append(customers, singleCustomer)
+	}
+
+	if len(customers) == 0 {
+		return []models.Customer{}, mongo.ErrNoDocuments
 	}
 
 	return customers, nil

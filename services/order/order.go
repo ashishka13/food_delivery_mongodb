@@ -71,5 +71,9 @@ func (s *OrderService) GetOrderWithFilter(ctx context.Context, filter bson.M) ([
 		ordersList = append(ordersList, singleOrder)
 	}
 
+	if len(ordersList) == 0 {
+		return []models.FoodOrder{}, mongo.ErrNoDocuments
+	}
+
 	return ordersList, nil
 }

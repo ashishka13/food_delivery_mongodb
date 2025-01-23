@@ -21,13 +21,13 @@ type FoodOrder struct {
 }
 
 type Restaurant struct {
-	ID      primitive.ObjectID `bson:"id,omitempty" json:"id"`
+	ID      primitive.ObjectID `bson:"id" json:"id"`
 	Name    string             `bson:"name" json:"name"`
 	Address string             `bson:"address" json:"address"`
 }
 
 type DeliveryPerson struct {
-	ID                primitive.ObjectID `bson:"id,omitempty" json:"id"`
+	ID                primitive.ObjectID `bson:"id" json:"id"`
 	Name              string             `bson:"name" json:"name"`
 	BusyStatus        bool               `bson:"busystatus" json:"busystatus"`
 	CurrentOrderID    string             `bson:"currentorderid" json:"currentorderid"`

@@ -18,6 +18,7 @@ type DeliveryPersonServicesInterface interface {
 	CreateDeliveryPerson(ctx context.Context, deliveryPerson models.DeliveryPerson) (*models.DeliveryPerson, error)
 	UpdateDeliveryPersonCustom(ctx context.Context, findFilter, updateSet bson.M) error
 	GetDeliveryPersonCustom(ctx context.Context, findFilter bson.M) (models.DeliveryPerson, error)
+	GetDeliveryPersonsCustom(ctx context.Context, findFilter bson.M) ([]models.DeliveryPerson, error)
 }
 
 type DeliveryPersonService struct {
@@ -74,30 +75,35 @@ func (s *DeliveryPersonService) UpdateDeliveryPersonCustom(ctx context.Context, 
 func (s *DeliveryPersonService) GetDeliveryPersonCustom(ctx context.Context, findFilter bson.M) (models.DeliveryPerson, error) {
 	deliveryPersonFound := models.DeliveryPerson{}
 	err := s.Database.Collection(utils.DeliveryPersons).FindOne(ctx, findFilter).Decode(&deliveryPersonFound)
-	if err != nil && err != mongo.ErrNoDocuments {
+	if err != nil {
 		log.Println("error occurred while getting the delivery person", err)
 		return models.DeliveryPerson{}, err
 	}
 	return deliveryPersonFound, nil
 }
 
-/*
-dfilter := primitive.M{"_id": singleBoy.ID}
-	dupdate := primitive.M{"$set": primitive.M{"currentlocation": utils.InTransit, "busystatus": true, "currentorderid": singleFood.ID}}
-	updateresult, err := db.Collection(utils.DeliveryPersons).UpdateOne(context.Background(), dfilter, dupdate)
+func (s *DeliveryPersonService) GetDeliveryPersonsCustom(ctx context.Context, findFilter bson.M) ([]models.DeliveryPerson, error) {
+	deliveryPersons := []models.DeliveryPerson{}
+	cursor, err := s.Database.Collection(utils.DeliveryPersons).Find(ctx, findFilter)
+	if err != nil {
+		log.Println("error occurred while getting the delivery persons", err)
+		return []models.DeliveryPerson{}, err
+	}
 
-	dupdate = primitive.M{"$set": primitive.M{"currentlocation": utils.AtRestaurant}}
-	_, err = db.Collection(utils.DeliveryPersons).UpdateOne(context.Background(), dfilter, dupdate)
+	singlePerson := models.DeliveryPerson{}
+	found := false
+	for cursor.Next(ctx) {
+		err = cursor.Decode(&singlePerson)
+		if err != nil {
+			log.Println("error occurred while decoding cursor data", err)
+			return []models.DeliveryPerson{}, err
+		}
+		deliveryPersons = append(deliveryPersons, singlePerson)
+		found = true
+	}
 
-	dfilter := primitive.M{"_id": singleBoy.ID}
-	dupdate := primitive.M{"$set": primitive.M{"currentlocation": utils.InTransit}}
-	_, err := db.Collection(utils.DeliveryPersons).UpdateOne(context.Background(), dfilter, dupdate)
-
-	dfilter := primitive.M{"_id": singleBoy.ID}
-	dupdate := primitive.M{"$set": primitive.M{"currentlocation": utils.AtCustomer}}
-	_, err := db.Collection(utils.DeliveryPersons).UpdateOne(context.Background(), dfilter, dupdate)
-
-		dfilter := primitive.M{"currentorderid": singleFood.ID}
-	dupdate := primitive.M{"$set": primitive.M{"busystatus": false, "currentorderid": "", "currentlocation": utils.Dock}}
-	_, err = db.Collection(utils.DeliveryPersons).UpdateOne(context.Background(), dfilter, dupdate)
-*/
+	if !found {
+		return []models.DeliveryPerson{}, mongo.ErrNoDocuments
+	}
+	return deliveryPersons, nil
+}
